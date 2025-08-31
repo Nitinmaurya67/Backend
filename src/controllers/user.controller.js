@@ -16,13 +16,13 @@ const resiterUser = asyncHandler(async (req, res) => {
   // return response
 
   const { fullName, email, username, password } = req.body;
-  console.log("email: ", email);
+
 
   if (!fullName || !email || !username || !password) {
     throw new ApiError(400, "All fields are required");
   }
 
-  const existedUser = User.findOne({
+  const existedUser =await User.findOne({
     $or: [{ email }, { username }],
   });
 
@@ -32,10 +32,13 @@ const resiterUser = asyncHandler(async (req, res) => {
 
   // req.file // this is coming from multer
   const avatarLocalPath = req.files?.avatar[0]?.path;
-  console.log("req.file--------------: ", req.files);
-  console.log("req -------------:", req);
+  // const coverImageLocalPath = req.files?.coverImage[0]?.path;
 
-  const coverImageLocalPath = req.files?.coverImage[0]?.path;
+  let coverImageLocalPath ;
+  if(req.files && req.files.coverImage && req.files.coverImage.length > 0){
+  
+    coverImageLocalPath = req.files.coverImage[0].path;
+  }
 
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar is required");
@@ -69,4 +72,4 @@ const resiterUser = asyncHandler(async (req, res) => {
    )
 
 });
-export { resiterUser };
+export { resiterUser };      
