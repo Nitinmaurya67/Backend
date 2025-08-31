@@ -1,7 +1,7 @@
 import { v2 as cloudinary } from "cloudinary"; // for cloudinary api , helps to upload image and video
 import fs from "fs"; // file system module, for handling file operations
 
-import { v2 as cloudinary } from "cloudinary";
+
 
 cloudinary.config({
   cloud_name: process.env.CLOUDNARY_CLOUD_NAME,
