@@ -4,6 +4,7 @@ import { User } from "../models/user.model.js";
 import { uploadOnCloudinary } from "../utils/cloudnary.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import jwt from "jsonwebtoken";
+import e from "express";
 
 const generateAccessTokenAndRefreshToken = async (userId) => {
   try {
@@ -253,16 +254,16 @@ const getCurrentUser = asyncHandler(async (req, res) => {
 });
 
 const updateAccountDetails = asyncHandler(async (req, res) => {
-  const { fullName, username } = req.body;
-  if (!fullName || !username) {
+  const { fullName, email } = req.body;
+  if (!fullName || !email) {
     throw new ApiError(400, "All fields are required");
   }
-  const user = User.findByIdAndUpdate(
+  const user = await User.findByIdAndUpdate(
     req.user._id,
     {
       $set: {
         fullName,
-        username,
+        email,
       },
     },
     { new: true } // return updated user
@@ -278,6 +279,9 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
   if (!avatarLocalPath) {
     throw new ApiError(400, "Avatar image is required");
   }
+
+  // delete previous avatar from cloudinary - TODO
+
   const avatar = await uploadOnCloudinary(avatarLocalPath);
   if (!avatar.url) {
     throw new ApiError(500, "Could not upload avatar image , try again later");
@@ -291,6 +295,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
     },
     { new: true } // return updated user
   ).select("-password ");
+
   return res
     .status(200)
     .json(new ApiResponse(200, user, "User avatar updated successfully"));
@@ -322,6 +327,80 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
     .json(new ApiResponse(200, user, "User cover image updated successfully"));
 });
 
+// aggregation pipeline , $lookup , $match , $project , $addFields
+// $match : filter documents
+//$lookup : join two collections
+// $project : select fields for output
+// $addFields : add new fields
+const getChannelProfile = asyncHandler(async (req, res) => {
+  const { username } = req.params;
+  if (!username?.trim()) {
+    throw new ApiError(400, "Username is required");
+  }
+  const channel = await User.aggregate([
+    {
+      $match: { username: username?.toLowerCase() },
+    },
+
+    // for subscribers
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "channel",
+        as: "subscribers",
+      }, // Subscription model will be converted to 'subscriptions' collection in mongodb
+    },
+
+    // for subscribed channels
+    {
+      $lookup: {
+        from: "subscriptions",
+        localField: "_id",
+        foreignField: "subscriber",
+        as: "subscribedTo",
+      },
+    },
+
+    // to get total count
+    {
+      $addFields: {
+        subdscriberCount: { $size: "$subscribers" }, // calculating size of array
+        channelsSubscribedToCount: { $size: "$subscribedTo" },
+        isSubscribed: {
+          $cond: {
+            if: { $in: [req.user?._id, "$subscribers.subscriber"] }, // if logged in user id is in subscribers array
+            then: true,
+            else: false,
+          },
+        },
+      },
+    },
+
+    {
+      $project: {
+        fullName: 1,
+        username: 1,
+        subdscriberCount: 1,
+        channelsSubscribedToCount: 1,
+        isSubscribed: 1,
+        avatar: 1,
+        coverImage: 1,
+        email: 1,
+      },
+    },
+  ]);
+  if (!channel?.length) {
+    throw new ApiError(404, "Channel not found");
+  }
+  console.log("Channel found : ", channel); // for debugging
+  return res
+    .status(200)
+    .json(
+      new ApiResponse(200, channel[0], "Channel profile fetched successfully")
+    );
+});
+
 export {
   resiterUser,
   loginUser,
@@ -332,4 +411,5 @@ export {
   updateAccountDetails,
   updateUserAvatar,
   updateUserCoverImage,
+  getChannelProfile,
 };
